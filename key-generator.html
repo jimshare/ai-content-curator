@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Content Curator - Key Generator</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #333;
+        }
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: monospace;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 44px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .url-output {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #dee2e6;
+            margin-top: 20px;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .copy-button {
+            background: #28a745;
+            margin-top: 10px;
+        }
+        .copy-button:hover {
+            background: #218838;
+        }
+        .copy-button.copied {
+            background: #6c757d;
+        }
+        .info-box {
+            background: #e3f2fd;
+            border: 1px solid #bbdefb;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .info-box h3 {
+            margin-top: 0;
+            color: #1976d2;
+        }
+        .step {
+            margin-bottom: 15px;
+        }
+        .step-number {
+            display: inline-block;
+            background: #007bff;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 24px;
+            margin-right: 10px;
+            font-weight: bold;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        // XOR encoding function (same as main app)
+        const XOR_KEY = "aHz!Flt$6Yu!4J#c";
+        
+        const xorEncode = (text) => {
+            let result = '';
+            for (let i = 0; i < text.length; i++) {
+                const textChar = text.charCodeAt(i);
+                const keyChar = XOR_KEY.charCodeAt(i % XOR_KEY.length);
+                result += String.fromCharCode(textChar ^ keyChar);
+            }
+            return btoa(result); // Base64 encode for URL safety
+        };
+
+        const KeyGenerator = () => {
+            const [apiKey, setApiKey] = useState('');
+            const [generatedUrl, setGeneratedUrl] = useState('');
+            const [copied, setCopied] = useState(false);
+
+            const generateUrl = () => {
+                if (!apiKey.trim()) {
+                    alert('Please enter your Gemini API key');
+                    return;
+                }
+
+                const encodedKey = xorEncode(apiKey.trim());
+                const baseUrl = window.location.href.replace('/key-generator.html', '/index.html');
+                const url = `${baseUrl}?key=${encodeURIComponent(encodedKey)}`;
+                setGeneratedUrl(url);
+                setCopied(false);
+            };
+
+            const copyToClipboard = async () => {
+                try {
+                    await navigator.clipboard.writeText(generatedUrl);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                } catch (err) {
+                    // Fallback for older browsers
+                    const textArea = document.createElement('textarea');
+                    textArea.value = generatedUrl;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                }
+            };
+
+            const clearAll = () => {
+                setApiKey('');
+                setGeneratedUrl('');
+                setCopied(false);
+            };
+
+            return (
+                <div className="container">
+                    <h1>AI Content Curator - Key Generator</h1>
+                    <p className="subtitle">Generate a secure URL with your obfuscated Gemini API key</p>
+                    
+                    <div className="info-box">
+                        <h3>How it works:</h3>
+                        <div className="step">
+                            <span className="step-number">1</span>
+                            Enter your Gemini API key below
+                        </div>
+                        <div className="step">
+                            <span className="step-number">2</span>
+                            Click "Generate URL" to create an obfuscated version
+                        </div>
+                        <div className="step">
+                            <span className="step-number">3</span>
+                            Copy the generated URL and use it to access the main application
+                        </div>
+                        <div className="step">
+                            <span className="step-number">4</span>
+                            Your API key will be automatically loaded and hidden in the main app
+                        </div>
+                    </div>
+
+                    <div className="form-group">
+                        <label htmlFor="apiKey">Gemini API Key:</label>
+                        <input
+                            id="apiKey"
+                            type="password"
+                            value={apiKey}
+                            onChange={(e) => setApiKey(e.target.value)}
+                            placeholder="Enter your Gemini API key (e.g., AIzaSy...)"
+                            onKeyPress={(e) => e.key === 'Enter' && generateUrl()}
+                        />
+                    </div>
+
+                    <div style={{display: 'flex', gap: '10px'}}>
+                        <button onClick={generateUrl} disabled={!apiKey.trim()}>
+                            Generate URL
+                        </button>
+
+                        <button onClick={clearAll} style={{background: '#6c757d'}}>
+                            Clear All
+                        </button>
+                    </div>
+
+                    {generatedUrl && (
+                        <div>
+                            <div className="url-output">
+                                <strong>Generated URL:</strong><br/>
+                                {generatedUrl}
+                            </div>
+                            <button 
+                                className={`copy-button ${copied ? 'copied' : ''}`}
+                                onClick={copyToClipboard}
+                            >
+                                {copied ? '✓ Copied!' : 'Copy URL'}
+                            </button>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        ReactDOM.render(<KeyGenerator />, document.getElementById('root'));
+    </script>
+</body>
+</html>

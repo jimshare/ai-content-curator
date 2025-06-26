@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Content Curator</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script type="module">
+        import { GoogleGenAI } from 'https://cdn.jsdelivr.net/npm/@google/genai/+esm';
+        window.GoogleGenAI = GoogleGenAI;
+    </script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 20px;
+        }
+        .main-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .sidebar {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            height: fit-content;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 38px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .expandable-section {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        .expandable-header {
+            background: #f8f9fa;
+            padding: 10px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .expandable-content {
+            padding: 15px;
+            border-top: 1px solid #ddd;
+        }
+        .update-item {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            overflow: hidden;
+        }
+        .update-header {
+            padding: 10px;
+            background: #f8f9fa;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .update-content {
+            padding: 15px;
+            border-top: 1px solid #ddd;
+        }
+        .excluded {
+            opacity: 0.6;
+            background-color: #fff3cd;
+        }
+        .excluded-label {
+            background: #ffc107;
+            color: #856404;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .plus-icon {
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .topic-tags {
+            margin: 5px 0;
+        }
+        .topic-tag {
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+            margin-right: 5px;
+            display: inline-block;
+        }
+        .processing-display {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-top: 20px;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // XOR encoding/decoding functions
+        const XOR_KEY = "aHz!Flt$6Yu!4J#c";
+        
+        const xorEncode = (text) => {
+            let result = '';
+            for (let i = 0; i < text.length; i++) {
+                const textChar = text.charCodeAt(i);
+                const keyChar = XOR_KEY.charCodeAt(i % XOR_KEY.length);
+                result += String.fromCharCode(textChar ^ keyChar);
+            }
+            return btoa(result); // Base64 encode for URL safety
+        };
+        
+        const xorDecode = (encoded) => {
+            try {
+                const decoded = atob(encoded); // Base64 decode
+                let result = '';
+                for (let i = 0; i < decoded.length; i++) {
+                    const encodedChar = decoded.charCodeAt(i);
+                    const keyChar = XOR_KEY.charCodeAt(i % XOR_KEY.length);
+                    result += String.fromCharCode(encodedChar ^ keyChar);
+                }
+                return result;
+            } catch (e) {
+                return null;
+            }
+        };
+
+        const AIContentCurator = () => {
+            const [substackUrl, setSubstackUrl] = useState('');
+            const [apiKey, setApiKey] = useState('');
+            const [model, setModel] = useState('gemini-2.5-flash');
+            const [rules, setRules] = useState([
+                "Don't show me any political content",
+                "Highlight the significant people involved in all updates",
+                "Give me more details on updates related to new AI models",
+                "Only show me novel ideas from this post"
+            ]);
+            const [newRule, setNewRule] = useState('');
+            const [showApiKeyInput, setShowApiKeyInput] = useState(true);
+            
+            // Expandable sections
+            const [showRuleProcessing, setShowRuleProcessing] = useState(false);
+            const [showArticleProcessing, setShowArticleProcessing] = useState(false);
+            
+            // Rule processing
+            const [ruleProcessingPrompt, setRuleProcessingPrompt] = useState(`Review the attached list of rules, which will be applied to process the text of a newsletter that includes one or more updates. In particular, note rules that specify certain updates should not be displayed. Then generate the following data:
+- A list of topic tags for newsletter updates. Topics should be included here if they will determine whether to either exclude an update or display the update contents in a particular way. Each topic tag should include the following fields:
+a. A one-word label for the topic tag
+b. A one-sentence summary of the topic
+c. A true-false field specifying if the topic should be excluded from the processed contents
+d. A true-false field specifying if only updates matching this topic should be included in the processed contents
+e. Any specific rules on how the contents for updates matching this topic should be displayed, noting whether it applies to short summaries, long summaries, or both
+- A list of general rules for the contents for all updates should be display, noting whether it applies to short summaries, long summaries, or both`);
+            
+            const [ruleProcessingSchema, setRuleProcessingSchema] = useState(`{
+  "type": "object",
+  "properties": {
+    "topic_tags": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "label": { "type": "string" },
+          "summary": { "type": "string" },
+          "excluded": { "type": "boolean" },
+          "included": { "type": "boolean" },
+          "topic_rules": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "required": ["label","summary","excluded","included","topic_rules"]
+      }
+    },
+    "general_rules": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "required": ["topic_tags","general_rules"]
+}`);
+            
+            // Article processing
+            const [articleProcessingPrompt, setArticleProcessingPrompt] = useState(`Review the attach text contents of a newsletter update. Identify a list of one or more distinct updates within the text. Review the list of topic tags below and determine which tags apply to each update. Then process each update to generate a short, one-sentence summary and a long, one-paragraph summary. Follow the general rules specified below for generating the summaries, as well as any topic-specific rules that apply to each update. Also include the full text of each update in your response, preserving line breaks.
+
+LIST OF TOPIC TAGS:
+{topic_tag_list}
+
+LIST OF EXCLUDED TOPICS:
+{topic_exclusion_list}
+
+LIST OF INCLUDED TOPICS (only show updates matching these topics):
+{topic_inclusion_list}
+
+GENERAL CONTENT RULES:
+{general_rule_list}
+
+TOPIC-SPECIFIC CONTENT RULES:
+{topic_rule_list}`);
+            
+            const [articleProcessingSchema, setArticleProcessingSchema] = useState(`{
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "title": { "type": "string" },
+      "topic_list": {
+        "type": "array",
+        "items": { "type": "string" }
+      },
+      "short_summary": { "type": "string" },
+      "long_summary": { "type": "string" },
+      "full_text": { "type": "string" },
+      "excluded": { "type": "boolean" }
+    },
+    "required": ["title","topic_list","short_summary","long_summary","full_text","excluded"]
+  }
+}`);
+            
+            // Processing states
+            const [processedRules, setProcessedRules] = useState(null);
+            const [processedArticle, setProcessedArticle] = useState(null);
+            const [ruleProcessing, setRuleProcessing] = useState(false);
+            const [articleProcessing, setArticleProcessing] = useState(false);
+            const [error, setError] = useState('');
+            
+            // Update display states
+            const [expandedUpdates, setExpandedUpdates] = useState({});
+
+            // Check for obfuscated API key in URL parameters
+            useEffect(() => {
+                const urlParams = new URLSearchParams(window.location.search);
+                const encodedKey = urlParams.get('key');
+                
+                if (encodedKey) {
+                    const decodedKey = xorDecode(encodedKey);
+                    if (decodedKey) {
+                        setApiKey(decodedKey);
+                        setShowApiKeyInput(false);
+                    }
+                }
+            }, []);
+
+            const addRule = () => {
+                if (newRule.trim()) {
+                    setRules([...rules, newRule.trim()]);
+                    setNewRule('');
+                }
+            };
+
+            const removeRule = (index) => {
+                setRules(rules.filter((_, i) => i !== index));
+            };
+
+            const processRules = async () => {
+                if (!apiKey) {
+                    setError('Please enter a Gemini API key');
+                    return;
+                }
+                
+                setRuleProcessing(true);
+                setError('');
+                
+                try {
+                    // Wait for GoogleGenAI to be available
+                    while (!window.GoogleGenAI) {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    
+                    const ai = new window.GoogleGenAI({ apiKey });
+                    
+                    const rulesList = rules.map((rule, i) => `${i + 1}. ${rule}`).join('\n');
+                    
+                    let schema;
+                    try {
+                        schema = JSON.parse(ruleProcessingSchema);
+                    } catch (e) {
+                        throw new Error('Invalid rule processing schema JSON');
+                    }
+                    
+                    const resp = await ai.models.generateContent({
+                        model,
+                        contents: [
+                            { text: `RULES TO PROCESS:\n${rulesList}` },
+                            { text: ruleProcessingPrompt }
+                        ],
+                        config: {
+                            responseMimeType: 'application/json',
+                            responseSchema: schema
+                        }
+                    });
+                    
+                    const result = JSON.parse(resp.text);
+                    setProcessedRules(result);
+                } catch (err) {
+                    setError(`Rule processing failed: ${err.message}`);
+                } finally {
+                    setRuleProcessing(false);
+                }
+            };
+
+            const processArticle = async () => {
+                if (!apiKey) {
+                    setError('Please enter a Gemini API key');
+                    return;
+                }
+                
+                if (!substackUrl) {
+                    setError('Please enter a Substack URL');
+                    return;
+                }
+                
+                if (!processedRules) {
+                    setError('Please process rules first');
+                    return;
+                }
+                
+                setArticleProcessing(true);
+                setError('');
+                
+                try {
+                    // Scrape URL
+                    const workerUrl = "https://url-text-fetcher-worker.jim-005.workers.dev/";
+                    const fullUrl = `${workerUrl}?url=${encodeURIComponent(substackUrl)}`;
+                    
+                    const scrapeResponse = await fetch(fullUrl, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                    });
+                    
+                    const data = await scrapeResponse.json();
+                    
+                    if (!scrapeResponse.ok) {
+                        throw new Error(`Scraping failed: ${data.error}`);
+                    }
+                    
+                    // Process with Gemini
+                    // Wait for GoogleGenAI to be available
+                    while (!window.GoogleGenAI) {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    
+                    const ai = new window.GoogleGenAI({ apiKey });
+                    
+                    // Prepare template variables
+                    const topicTagList = processedRules.topic_tags.map(tag => 
+                        `${tag.label}: ${tag.summary}`
+                    ).join('\n');
+                    
+                    const topicExclusionList = processedRules.topic_tags
+                        .filter(tag => tag.excluded)
+                        .map(tag => tag.label)
+                        .join(', ');
+                    
+                    const topicInclusionList = processedRules.topic_tags
+                        .filter(tag => tag.included)
+                        .map(tag => tag.label)
+                        .join(', ');
+                    
+                    const generalRuleList = processedRules.general_rules.join('\n');
+                    
+                    const topicRuleList = processedRules.topic_tags
+                        .filter(tag => tag.topic_rules.length > 0)
+                        .map(tag => `${tag.label}: ${tag.topic_rules.join('; ')}`)
+                        .join('\n');
+                    
+                    const finalPrompt = articleProcessingPrompt
+                        .replace('{topic_tag_list}', topicTagList)
+                        .replace('{topic_exclusion_list}', topicExclusionList)
+                        .replace('{topic_inclusion_list}', topicInclusionList)
+                        .replace('{general_rule_list}', generalRuleList)
+                        .replace('{topic_rule_list}', topicRuleList);
+                    
+                    let schema;
+                    try {
+                        schema = JSON.parse(articleProcessingSchema);
+                    } catch (e) {
+                        throw new Error('Invalid article processing schema JSON');
+                    }
+                    
+                    const resp = await ai.models.generateContent({
+                        model,
+                        contents: [
+                            { text: `ARTICLE TEXT:\n${data.text}` },
+                            { text: finalPrompt }
+                        ],
+                        config: {
+                            responseMimeType: 'application/json',
+                            responseSchema: schema
+                        }
+                    });
+                    
+                    const result = JSON.parse(resp.text);
+                    setProcessedArticle(result);
+                    setExpandedUpdates({});
+                } catch (err) {
+                    setError(`Article processing failed: ${err.message}`);
+                } finally {
+                    setArticleProcessing(false);
+                }
+            };
+
+            const toggleUpdateExpansion = (updateIndex, level) => {
+                setExpandedUpdates(prev => ({
+                    ...prev,
+                    [`${updateIndex}-${level}`]: !prev[`${updateIndex}-${level}`]
+                }));
+            };
+
+            return (
+                <div className="container">
+                    <div className="main-content">
+                        <h1>AI Content Curator</h1>
+                        
+                        {error && <div className="error">{error}</div>}
+                        
+                        <div className="form-group">
+                            <label>Substack URL:</label>
+                            <input
+                                type="url"
+                                value={substackUrl}
+                                onChange={(e) => setSubstackUrl(e.target.value)}
+                                placeholder="https://example.substack.com/p/article-title"
+                            />
+                        </div>
+                        
+                        <div className="form-group">
+                            {showApiKeyInput ? (
+                                <>
+                                    <label>Gemini API Key:</label>
+                                    <input
+                                        type="password"
+                                        value={apiKey}
+                                        onChange={(e) => setApiKey(e.target.value)}
+                                        placeholder="Enter your Gemini API key"
+                                    />
+                                    {apiKey && (
+                                        <button onClick={() => setShowApiKeyInput(false)}>
+                                            Save API Key
+                                        </button>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    <label>Gemini API Key:</label>
+                                    <button onClick={() => setShowApiKeyInput(true)}>
+                                        Change API Key
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                        
+                        <div className="form-group">
+                            <label>Gemini Model:</label>
+                            <select value={model} onChange={(e) => setModel(e.target.value)}>
+                                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                            </select>
+                        </div>
+                        
+                        <div className="form-group">
+                            <label>Processing Rules:</label>
+                            {rules.map((rule, index) => (
+                                <div key={index} style={{ display: 'flex', marginBottom: '5px', alignItems: 'center' }}>
+                                    <span style={{ flex: 1, padding: '5px' }}>{rule}</span>
+                                    <button onClick={() => removeRule(index)} style={{ marginLeft: '10px' }}>
+                                        Remove
+                                    </button>
+                                </div>
+                            ))}
+                            <div style={{ display: 'flex', marginTop: '10px' }}>
+                                <input
+                                    type="text"
+                                    value={newRule}
+                                    onChange={(e) => setNewRule(e.target.value)}
+                                    placeholder="Add new rule"
+                                    style={{ flex: 1, marginRight: '10px' }}
+                                    onKeyPress={(e) => e.key === 'Enter' && addRule()}
+                                />
+                                <button onClick={addRule}>Add Rule</button>
+                            </div>
+                        </div>
+                        
+                        <button 
+                            onClick={processRules} 
+                            disabled={ruleProcessing || !apiKey}
+                        >
+                            {ruleProcessing ? (
+                                <>
+                                    <div className="spinner" style={{width: '16px', height: '16px', borderWidth: '2px', marginRight: '8px'}}></div>
+                                    Processing Rules...
+                                </>
+                            ) : 'Process Rules'}
+                        </button>
+                        
+                        <button 
+                            onClick={processArticle} 
+                            disabled={articleProcessing || !apiKey || !processedRules}
+                        >
+                            {articleProcessing ? (
+                                <>
+                                    <div className="spinner" style={{width: '16px', height: '16px', borderWidth: '2px', marginRight: '8px'}}></div>
+                                    Processing Article...
+                                </>
+                            ) : 'Process Article'}
+                        </button>
+                        
+                        {/* Expandable sections for prompts and schemas */}
+                        <div className="expandable-section">
+                            <div 
+                                className="expandable-header"
+                                onClick={() => setShowRuleProcessing(!showRuleProcessing)}
+                            >
+                                <span>Rule Processing Prompt & Schema</span>
+                                <span className="plus-icon">{showRuleProcessing ? '−' : '+'}</span>
+                            </div>
+                            {showRuleProcessing && (
+                                <div className="expandable-content">
+                                    <div className="form-group">
+                                        <label>Rule Processing Prompt:</label>
+                                        <textarea
+                                            value={ruleProcessingPrompt}
+                                            onChange={(e) => setRuleProcessingPrompt(e.target.value)}
+                                            rows={8}
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Rule Processing Response Schema:</label>
+                                        <textarea
+                                            value={ruleProcessingSchema}
+                                            onChange={(e) => setRuleProcessingSchema(e.target.value)}
+                                            rows={8}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="expandable-section">
+                            <div 
+                                className="expandable-header"
+                                onClick={() => setShowArticleProcessing(!showArticleProcessing)}
+                            >
+                                <span>Article Processing Prompt & Schema</span>
+                                <span className="plus-icon">{showArticleProcessing ? '−' : '+'}</span>
+                            </div>
+                            {showArticleProcessing && (
+                                <div className="expandable-content">
+                                    <div className="form-group">
+                                        <label>Article Processing Prompt:</label>
+                                        <textarea
+                                            value={articleProcessingPrompt}
+                                            onChange={(e) => setArticleProcessingPrompt(e.target.value)}
+                                            rows={8}
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Article Processing Response Schema:</label>
+                                        <textarea
+                                            value={articleProcessingSchema}
+                                            onChange={(e) => setArticleProcessingSchema(e.target.value)}
+                                            rows={8}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        
+                        {/* Processed Article Display */}
+                        {processedArticle && (
+                            <div className="processing-display">
+                                <h2>Processed Article Updates</h2>
+                                {processedArticle.map((update, index) => (
+                                    <div 
+                                        key={index} 
+                                        className={`update-item ${update.excluded ? 'excluded' : ''}`}
+                                    >
+                                        <div 
+                                            className="update-header"
+                                            onClick={() => toggleUpdateExpansion(index, 'short')}
+                                        >
+                                            <div>
+                                                <strong>{update.title}</strong>
+                                                {update.excluded && (
+                                                    <span className="excluded-label" style={{ marginLeft: '10px' }}>
+                                                        Excluded
+                                                    </span>
+                                                )}
+                                                <div className="topic-tags">
+                                                    {update.topic_list.map((topic, i) => (
+                                                        <span key={i} className="topic-tag">{topic}</span>
+                                                    ))}
+                                                </div>
+                                                <div style={{ marginTop: '5px' }}>
+                                                    {update.short_summary}
+                                                </div>
+                                            </div>
+                                            <span className="plus-icon">
+                                                {expandedUpdates[`${index}-short`] ? '−' : '+'}
+                                            </span>
+                                        </div>
+                                        {expandedUpdates[`${index}-short`] && (
+                                            <div className="update-content">
+                                                <p><strong>Long Summary:</strong></p>
+                                                <p>{update.long_summary}</p>
+                                                <div 
+                                                    style={{ 
+                                                        cursor: 'pointer', 
+                                                        display: 'flex', 
+                                                        justifyContent: 'space-between',
+                                                        alignItems: 'center',
+                                                        marginTop: '10px',
+                                                        padding: '5px',
+                                                        backgroundColor: '#f8f9fa',
+                                                        borderRadius: '4px'
+                                                    }}
+                                                    onClick={() => toggleUpdateExpansion(index, 'full')}
+                                                >
+                                                    <span>Show Full Text</span>
+                                                    <span className="plus-icon">
+                                                        {expandedUpdates[`${index}-full`] ? '−' : '+'}
+                                                    </span>
+                                                </div>
+                                                {expandedUpdates[`${index}-full`] && (
+                                                    <div style={{ marginTop: '10px' }}>
+                                                        <p><strong>Full Text:</strong></p>
+                                                        <div style={{ 
+                                                            whiteSpace: 'pre-wrap', 
+                                                            backgroundColor: '#f8f9fa',
+                                                            padding: '10px',
+                                                            borderRadius: '4px',
+                                                            fontSize: '14px'
+                                                        }}>
+                                                            {update.full_text.replace(/\n/g, '\n\n')}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    
+                    <div className="sidebar">
+                        <h3>Processed Rules</h3>
+                        {processedRules ? (
+                            <div>
+                                <h4>Topic Tags</h4>
+                                {processedRules.topic_tags.map((tag, index) => (
+                                    <div key={index} style={{ marginBottom: '15px', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
+                                        <strong>{tag.label}</strong>
+                                        {tag.excluded && <span className="excluded-label" style={{ marginLeft: '5px', fontSize: '10px' }}>EXCLUDED</span>}
+                                        {tag.included && <span style={{ marginLeft: '5px', fontSize: '10px', backgroundColor: '#28a745', color: 'white', padding: '2px 6px', borderRadius: '3px', fontWeight: 'bold' }}>INCLUDED ONLY</span>}
+                                        <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+                                            {tag.summary}
+                                        </div>
+                                        {tag.topic_rules.length > 0 && (
+                                            <div style={{ fontSize: '12px', marginTop: '5px' }}>
+                                                <strong>Rules:</strong>
+                                                <ul style={{ margin: '5px 0', paddingLeft: '15px' }}>
+                                                    {tag.topic_rules.map((rule, i) => (
+                                                        <li key={i}>{rule}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                                
+                                <h4>General Rules</h4>
+                                <ul style={{ paddingLeft: '15px' }}>
+                                    {processedRules.general_rules.map((rule, index) => (
+                                        <li key={index} style={{ marginBottom: '5px', fontSize: '14px' }}>
+                                            {rule}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ) : (
+                            <p style={{ color: '#666', fontStyle: 'italic' }}>
+                                Process rules to see the generated topic tags and content rules here.
+                            </p>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<AIContentCurator />, document.getElementById('root'));
+    </script>
+</body>
+</html>
