@@ -177,6 +177,52 @@
             border-radius: 4px;
             margin: 10px 0;
         }
+        .tab-container {
+            margin-top: 20px;
+        }
+        .tab-headers {
+            display: flex;
+            border-bottom: 2px solid #dee2e6;
+            margin-bottom: 20px;
+        }
+        .tab-header {
+            padding: 12px 24px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-bottom: none;
+            cursor: pointer;
+            font-weight: 500;
+            color: #6c757d;
+            margin-right: 2px;
+            border-radius: 4px 4px 0 0;
+        }
+        .tab-header.active {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+        .tab-header:hover:not(.active) {
+            background: #e9ecef;
+            color: #495057;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .json-output {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 600px;
+            overflow-y: auto;
+            word-break: break-all;
+        }
     </style>
 </head>
 <body>
@@ -308,12 +354,14 @@ TOPIC-SPECIFIC CONTENT RULES:
             // Processing states
             const [processedRules, setProcessedRules] = useState(null);
             const [processedArticle, setProcessedArticle] = useState(null);
+            const [rawJsonResponse, setRawJsonResponse] = useState(null);
             const [ruleProcessing, setRuleProcessing] = useState(false);
             const [articleProcessing, setArticleProcessing] = useState(false);
             const [error, setError] = useState('');
             
             // Update display states
             const [expandedUpdates, setExpandedUpdates] = useState({});
+            const [activeTab, setActiveTab] = useState('processed');
 
             // Check for obfuscated API key in URL parameters
             useEffect(() => {
@@ -482,7 +530,9 @@ TOPIC-SPECIFIC CONTENT RULES:
                     
                     const result = JSON.parse(resp.text);
                     setProcessedArticle(result);
+                    setRawJsonResponse(resp.text);
                     setExpandedUpdates({});
+                    setActiveTab('processed');
                 } catch (err) {
                     setError(`Article processing failed: ${err.message}`);
                 } finally {
@@ -659,76 +709,100 @@ TOPIC-SPECIFIC CONTENT RULES:
                         {/* Processed Article Display */}
                         {processedArticle && (
                             <div className="processing-display">
-                                <h2>Processed Article Updates</h2>
-                                {processedArticle.map((update, index) => (
-                                    <div 
-                                        key={index} 
-                                        className={`update-item ${update.excluded ? 'excluded' : ''}`}
-                                    >
+                                <div className="tab-container">
+                                    <div className="tab-headers">
                                         <div 
-                                            className="update-header"
-                                            onClick={() => toggleUpdateExpansion(index, 'short')}
+                                            className={`tab-header ${activeTab === 'processed' ? 'active' : ''}`}
+                                            onClick={() => setActiveTab('processed')}
                                         >
-                                            <div>
-                                                <strong>{update.title}</strong>
-                                                {update.excluded && (
-                                                    <span className="excluded-label" style={{ marginLeft: '10px' }}>
-                                                        Excluded
-                                                    </span>
-                                                )}
-                                                <div className="topic-tags">
-                                                    {update.topic_list.map((topic, i) => (
-                                                        <span key={i} className="topic-tag">{topic}</span>
-                                                    ))}
-                                                </div>
-                                                <div style={{ marginTop: '5px' }}>
-                                                    {update.short_summary}
-                                                </div>
-                                            </div>
-                                            <span className="plus-icon">
-                                                {expandedUpdates[`${index}-short`] ? '−' : '+'}
-                                            </span>
+                                            Processed Article Updates
                                         </div>
-                                        {expandedUpdates[`${index}-short`] && (
-                                            <div className="update-content">
-                                                <p><strong>Long Summary:</strong></p>
-                                                <p>{update.long_summary}</p>
+                                        <div 
+                                            className={`tab-header ${activeTab === 'raw' ? 'active' : ''}`}
+                                            onClick={() => setActiveTab('raw')}
+                                        >
+                                            Raw JSON Response
+                                        </div>
+                                    </div>
+                                    
+                                    <div className={`tab-content ${activeTab === 'processed' ? 'active' : ''}`}>
+                                        {processedArticle.map((update, index) => (
+                                            <div 
+                                                key={index} 
+                                                className={`update-item ${update.excluded ? 'excluded' : ''}`}
+                                            >
                                                 <div 
-                                                    style={{ 
-                                                        cursor: 'pointer', 
-                                                        display: 'flex', 
-                                                        justifyContent: 'space-between',
-                                                        alignItems: 'center',
-                                                        marginTop: '10px',
-                                                        padding: '5px',
-                                                        backgroundColor: '#f8f9fa',
-                                                        borderRadius: '4px'
-                                                    }}
-                                                    onClick={() => toggleUpdateExpansion(index, 'full')}
+                                                    className="update-header"
+                                                    onClick={() => toggleUpdateExpansion(index, 'short')}
                                                 >
-                                                    <span>Show Full Text</span>
+                                                    <div>
+                                                        <strong>{update.title}</strong>
+                                                        {update.excluded && (
+                                                            <span className="excluded-label" style={{ marginLeft: '10px' }}>
+                                                                Excluded
+                                                            </span>
+                                                        )}
+                                                        <div className="topic-tags">
+                                                            {update.topic_list.map((topic, i) => (
+                                                                <span key={i} className="topic-tag">{topic}</span>
+                                                            ))}
+                                                        </div>
+                                                        <div style={{ marginTop: '5px' }}>
+                                                            {update.short_summary}
+                                                        </div>
+                                                    </div>
                                                     <span className="plus-icon">
-                                                        {expandedUpdates[`${index}-full`] ? '−' : '+'}
+                                                        {expandedUpdates[`${index}-short`] ? '−' : '+'}
                                                     </span>
                                                 </div>
-                                                {expandedUpdates[`${index}-full`] && (
-                                                    <div style={{ marginTop: '10px' }}>
-                                                        <p><strong>Full Text:</strong></p>
-                                                        <div style={{ 
-                                                            whiteSpace: 'pre-wrap', 
-                                                            backgroundColor: '#f8f9fa',
-                                                            padding: '10px',
-                                                            borderRadius: '4px',
-                                                            fontSize: '14px'
-                                                        }}>
-                                                            {update.full_text.replace(/\n/g, '\n\n')}
+                                                {expandedUpdates[`${index}-short`] && (
+                                                    <div className="update-content">
+                                                        <p><strong>Long Summary:</strong></p>
+                                                        <p>{update.long_summary}</p>
+                                                        <div 
+                                                            style={{ 
+                                                                cursor: 'pointer', 
+                                                                display: 'flex', 
+                                                                justifyContent: 'space-between',
+                                                                alignItems: 'center',
+                                                                marginTop: '10px',
+                                                                padding: '5px',
+                                                                backgroundColor: '#f8f9fa',
+                                                                borderRadius: '4px'
+                                                            }}
+                                                            onClick={() => toggleUpdateExpansion(index, 'full')}
+                                                        >
+                                                            <span>Show Full Text</span>
+                                                            <span className="plus-icon">
+                                                                {expandedUpdates[`${index}-full`] ? '−' : '+'}
+                                                            </span>
                                                         </div>
+                                                        {expandedUpdates[`${index}-full`] && (
+                                                            <div style={{ marginTop: '10px' }}>
+                                                                <p><strong>Full Text:</strong></p>
+                                                                <div style={{ 
+                                                                    whiteSpace: 'pre-wrap', 
+                                                                    backgroundColor: '#f8f9fa',
+                                                                    padding: '10px',
+                                                                    borderRadius: '4px',
+                                                                    fontSize: '14px'
+                                                                }}>
+                                                                    {update.full_text.replace(/\n/g, '\n\n')}
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
-                                        )}
+                                        ))}
                                     </div>
-                                ))}
+                                    
+                                    <div className={`tab-content ${activeTab === 'raw' ? 'active' : ''}`}>
+                                        <div className="json-output">
+                                            {rawJsonResponse ? JSON.stringify(JSON.parse(rawJsonResponse), null, 2) : 'No raw response available'}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         )}
                     </div>
